@@ -1,0 +1,33 @@
+model Category {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  gearItems GearItem[]
+
+  @@map("categories")
+}
+
+model GearItem {
+  id                String   @id @default(uuid())
+  name              String
+  description       String   @db.Text
+  brand             String?
+  images            String[]
+  pricePerDay       Decimal  @db.Decimal(10, 2)
+  quantityTotal     Int
+  quantityAvailable Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  providerId String
+  provider   User   @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  orderItems RentalOrderItem[]
+  reviews    Review[]
+
+  @@index([providerId])
+  @@index([categoryId])
+  @@map("gear_items")
+}
