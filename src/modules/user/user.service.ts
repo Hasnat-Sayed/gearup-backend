@@ -3,8 +3,9 @@ import httpStatus from "http-status";
 import config from "../../config";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import { TRegisterUserPayload, TUpdateMyProfilePayload } from "./user.validation";
 
-const registerUserIntoDB = async (payload: any) => {
+const registerUserIntoDB = async (payload: TRegisterUserPayload) => {
   const existing = await prisma.user.findUnique({
     where: { email: payload.email },
   });
@@ -35,7 +36,7 @@ const getMyProfileFromDB = (userId: string) =>
     omit: { password: true },
   });
 
-const updateMyProfileInDB = (userId: string, payload: any) =>
+const updateMyProfileInDB = (userId: string,  payload: TUpdateMyProfilePayload) =>
   prisma.user.update({
     where: { id: userId },
     data: { name: payload.name, phone: payload.phone },

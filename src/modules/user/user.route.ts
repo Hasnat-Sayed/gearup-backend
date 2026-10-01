@@ -3,7 +3,7 @@ import { Role } from "../../../generated/prisma/enums";
 import { auth } from "../../middlewares/auth";
 import { validateRequest } from "../../middlewares/validateRequest";
 import { userController } from "./user.controller";
-import { registerUserValidation } from "./user.validation";
+import { registerUserValidation, updateMyProfileValidation } from "./user.validation";
 
 const router = Router();
 router.post(
@@ -19,6 +19,7 @@ router.get(
 router.patch(
   "/me",
   auth(Role.CUSTOMER, Role.PROVIDER, Role.ADMIN),
+  validateRequest(updateMyProfileValidation),
   userController.updateMyProfile,
 );
 

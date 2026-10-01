@@ -9,3 +9,13 @@ export const registerUserValidation = z.object({
     role: z.enum(["CUSTOMER", "PROVIDER"]).default("CUSTOMER"),
   }),
 });
+
+export const updateMyProfileValidation = z.object({
+  body: z.object({
+    name: z.string().min(2).optional(),
+    phone: z.string().optional(),
+  }),
+});
+
+export type TRegisterUserPayload = z.infer<typeof registerUserValidation>["body"];
+export type TUpdateMyProfilePayload = z.infer<typeof updateMyProfileValidation>["body"];
