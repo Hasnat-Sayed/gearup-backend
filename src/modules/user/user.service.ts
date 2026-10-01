@@ -25,12 +25,25 @@ const registerUserIntoDB = async (payload: any) => {
       password: hashedPassword,
       role: payload.role ?? "CUSTOMER",
     },
-    // omit: { password: true },
+    omit: { password: true },
   });
 };
 
+const getMyProfileFromDB = (userId: string) =>
+  prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    omit: { password: true },
+  });
 
+const updateMyProfileInDB = (userId: string, payload: any) =>
+  prisma.user.update({
+    where: { id: userId },
+    data: { name: payload.name, phone: payload.phone },
+    omit: { password: true },
+  });
 
 export const userService = {
   registerUserIntoDB,
+  getMyProfileFromDB,
+  updateMyProfileInDB,
 };
