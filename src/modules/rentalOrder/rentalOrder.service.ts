@@ -134,7 +134,60 @@ const getMyOrdersFromDB = async (
   };
 };
 
+const getProviderOrdersFromDB = async (
+  providerId: string,
+  query: IRentalOrderQuery,
+) => {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
+
+  const where: Prisma.RentalOrderWhereInput = {
+    items: {
+      some: {
+        gearItem: {
+          providerId,
+        },
+      },
+    },
+    ...(query.status && {
+      status: query.status as RentalOrderStatus,
+    }),
+  };
+
+  const [data, total] = await prisma.$transaction(async (tx) => {
+    const data = await tx.rentalOrder.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      include: {
+        items: {
+          include: {
+            gearItem: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+          },
+        },
+        payment: true,
+      },
+    });
+    const total = await tx.rentalOrder.count({ where });
+    return [data, total];
+  });
+
+  return {
+    data,
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+};
+
 export const rentalOrderService = {
   createRentalOrderIntoDB,
-  getMyOrdersFromDB
+  getMyOrdersFromDB,
+  getProviderOrdersFromDB,
 };

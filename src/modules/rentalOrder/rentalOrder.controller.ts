@@ -32,7 +32,22 @@ const getMyOrders = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const getProviderOrders = catchAsync(async (req: Request, res: Response) => {
+  const result = await rentalOrderService.getProviderOrdersFromDB(
+    req.user!.id,
+    req.query as IRentalOrderQuery,
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Incoming orders fetched successfully",
+    data: result.data,
+    meta: result.meta,
+  });
+});
+
 export const rentalOrderController = {
   createRentalOrder,
-  getMyOrders
+  getMyOrders,
+  getProviderOrders
 };
