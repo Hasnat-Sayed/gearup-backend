@@ -26,4 +26,10 @@ router.get(
   rentalOrderController.getProviderOrders,
 );
 
+router.get(
+  "/:id",
+  auth(Role.CUSTOMER, Role.PROVIDER, Role.ADMIN),
+  rentalOrderController.getOrderById,
+);
+
 export const rentalOrderRoutes = router;

@@ -186,8 +186,46 @@ const getProviderOrdersFromDB = async (
   };
 };
 
+const getOrderByIdFromDB = async (id: string, userId: string, role: string) => {
+  const order = await prisma.rentalOrder.findUniqueOrThrow({
+    where: {
+      id,
+    },
+    include: {
+      items: {
+        include: {
+          gearItem: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+      payment: true,
+    },
+  });
+
+  const isOwner = order.customerId === userId;
+  const isProviderOfAnItem = order.items.some(
+    (item) => item.gearItem.providerId === userId,
+  );
+
+  if (!isOwner && !isProviderOfAnItem && role !== "ADMIN") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You don't have access to this order.",
+    );
+  }
+
+  return order;
+};
+
 export const rentalOrderService = {
   createRentalOrderIntoDB,
   getMyOrdersFromDB,
   getProviderOrdersFromDB,
+  getOrderByIdFromDB
 };
