@@ -1,6 +1,7 @@
-import { Prisma } from "../../../generated/prisma/client";
+import { Prisma, RentalOrderStatus } from "../../../generated/prisma/client";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
+import { IRentalOrderQuery } from "./rentalOrder.interface";
 import { TCreateRentalOrderPayload } from "./rentalOrder.validation";
 import httpStatus from "http-status";
 
@@ -10,7 +11,9 @@ const createRentalOrderIntoDB = async (
 ) => {
   const days = Math.max(
     1,
-    Math.ceil((payload.endDate.getTime() - payload.startDate.getTime()) / 86_400_000),
+    Math.ceil(
+      (payload.endDate.getTime() - payload.startDate.getTime()) / 86_400_000,
+    ),
   );
 
   const result = await prisma.$transaction(async (tx) => {
@@ -83,6 +86,55 @@ const createRentalOrderIntoDB = async (
   return result;
 };
 
+const getMyOrdersFromDB = async (
+  customerId: string,
+  query: IRentalOrderQuery,
+) => {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
+
+  const where: Prisma.RentalOrderWhereInput = {
+    customerId,
+    ...(query.status && {
+      status: query.status as RentalOrderStatus,
+    }),
+  };
+
+  const [data, total] = await prisma.$transaction(async (tx) => {
+    const data = await tx.rentalOrder.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        items: {
+          include: {
+            gearItem: true,
+          },
+        },
+        payment: true,
+      },
+    });
+    const total = await tx.rentalOrder.count({
+      where,
+    });
+    return [data, total];
+  });
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
 export const rentalOrderService = {
   createRentalOrderIntoDB,
+  getMyOrdersFromDB
 };
