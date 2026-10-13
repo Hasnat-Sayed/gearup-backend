@@ -9,15 +9,30 @@ import { AppError } from "../../utils/AppError";
 import { IPaymentQuery } from "./payment.interface";
 import { handleCheckoutCompleted, handleCheckoutFailed } from "./payment.utils";
 
-const createPaymentSession = async (customerId: string, rentalOrderId: string) => {
+const createPaymentSession = async (
+  customerId: string,
+  rentalOrderId: string,
+) => {
   const result = await prisma.$transaction(async (tx) => {
     const order = await tx.rentalOrder.findUniqueOrThrow({
-      where: { id: rentalOrderId },
-      include: { items: { include: { gearItem: true } }, payment: true },
+      where: {
+        id: rentalOrderId,
+      },
+      include: {
+        items: {
+          include: {
+            gearItem: true,
+          },
+        },
+        payment: true,
+      },
     });
 
     if (order.customerId !== customerId) {
-      throw new AppError(httpStatus.FORBIDDEN, "You can only pay for your own orders.");
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You can only pay for your own orders.",
+      );
     }
     if (order.status !== "CONFIRMED") {
       throw new AppError(
@@ -37,7 +52,9 @@ const createPaymentSession = async (customerId: string, rentalOrderId: string) =
         price_data: {
           currency: "usd",
           unit_amount: Math.round(Number(item.subtotal) * 100),
-          product_data: { name: `${item.gearItem.name} x ${item.quantity}` },
+          product_data: {
+            name: `${item.gearItem.name} x ${item.quantity}`,
+          },
         },
       })),
       success_url: `${config.app_url}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -45,10 +62,15 @@ const createPaymentSession = async (customerId: string, rentalOrderId: string) =
       metadata: { rentalOrderId: order.id, customerId },
     });
 
-    // retry-safe: one Payment row per order, pointed at the latest session
     await tx.payment.upsert({
-      where: { rentalOrderId: order.id },
-      update: { transactionId: session.id, amount: order.totalAmount, status: "PENDING" },
+      where: {
+        rentalOrderId: order.id,
+      },
+      update: {
+        transactionId: session.id,
+        amount: order.totalAmount,
+        status: "PENDING",
+      },
       create: {
         rentalOrderId: order.id,
         transactionId: session.id,
@@ -67,14 +89,23 @@ const createPaymentSession = async (customerId: string, rentalOrderId: string) =
 const handleWebhook = async (payload: Buffer, signature: string) => {
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(payload, signature, config.stripe_webhook_secret);
+    event = stripe.webhooks.constructEvent(
+      payload,
+      signature,
+      config.stripe_webhook_secret,
+    );
   } catch (err: any) {
-    throw new AppError(httpStatus.BAD_REQUEST, `Webhook signature verification failed: ${err.message}`);
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Webhook signature verification failed: ${err.message}`,
+    );
   }
 
   switch (event.type) {
     case "checkout.session.completed":
-      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      await handleCheckoutCompleted(
+        event.data.object as Stripe.Checkout.Session,
+      );
       break;
     case "checkout.session.expired":
     case "checkout.session.async_payment_failed":
@@ -85,10 +116,103 @@ const handleWebhook = async (payload: Buffer, signature: string) => {
   }
 };
 
+const getPaymentsFromDB = async (
+  userId: string,
+  role: string,
+  query: IPaymentQuery,
+) => {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
 
+  const roleFilter: Prisma.PaymentWhereInput =
+    role === "ADMIN"
+      ? {}
+      : role === "PROVIDER"
+        ? {
+            rentalOrder: {
+              items: {
+                some: {
+                  gearItem: {
+                    providerId: userId,
+                  },
+                },
+              },
+            },
+          }
+        : {
+            rentalOrder: {
+              customerId: userId,
+            },
+          };
+
+  const where: Prisma.PaymentWhereInput = {
+    ...roleFilter,
+    ...(query.status && { status: query.status as PaymentStatus }),
+  };
+
+  const [data, total] = await prisma.$transaction(async (tx) => {
+    const data = await tx.payment.findMany({
+      where,
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: { createdAt: "desc" },
+      include: {
+        rentalOrder: {
+          select: {
+            id: true,
+            status: true,
+            startDate: true,
+            endDate: true,
+          },
+        },
+      },
+    });
+    const total = await tx.payment.count({ where });
+    return [data, total];
+  });
+
+  return {
+    data,
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+};
+
+const getPaymentByIdFromDB = async (
+  id: string,
+  userId: string,
+  role: string,
+) => {
+  const payment = await prisma.payment.findUniqueOrThrow({
+    where: { id },
+    include: {
+      rentalOrder: {
+        include: {
+          items: {
+            include: {
+              gearItem: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const isOwner = payment.rentalOrder.customerId === userId;
+  const isProvider = payment.rentalOrder.items.some(
+    (i) => i.gearItem.providerId === userId,
+  );
+  if (!isOwner && !isProvider && role !== "ADMIN") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You don't have access to this payment.",
+    );
+  }
+  return payment;
+};
 
 export const paymentService = {
   createPaymentSession,
   handleWebhook,
-
+  getPaymentsFromDB,
+  getPaymentByIdFromDB,
 };

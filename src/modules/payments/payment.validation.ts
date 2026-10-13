@@ -6,6 +6,15 @@ export const createPaymentValidation = z.object({
   }),
 });
 
+export const confirmPaymentValidation = z.object({
+  body: z.object({
+    sessionId: z.string().min(1, "sessionId is required"),
+  }),
+});
+
 export type TCreatePaymentPayload = z.infer<
   typeof createPaymentValidation
+>["body"];
+export type TConfirmPaymentPayload = z.infer<
+  typeof confirmPaymentValidation
 >["body"];

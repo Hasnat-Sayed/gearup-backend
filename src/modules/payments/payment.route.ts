@@ -15,5 +15,15 @@ router.post(
   validateRequest(createPaymentValidation),
   paymentController.createPaymentSession,
 );
+router.get(
+  "/",
+  auth(Role.CUSTOMER, Role.PROVIDER, Role.ADMIN),
+  paymentController.getPayments,
+);
+router.get(
+  "/:id",
+  auth(Role.CUSTOMER, Role.PROVIDER, Role.ADMIN),
+  paymentController.getPaymentById,
+);
 
 export const paymentRoutes = router;
