@@ -23,7 +23,17 @@ export const createRentalOrderValidation = z.object({
     }),
 });
 
+export const updateOrderStatusValidation = z.object({
+  body: z.object({
+    status: z.enum(["CONFIRMED", "PICKED_UP", "RETURNED"], {
+      message: "Status must be one of: CONFIRMED, PICKED_UP, RETURNED",
+    }),
+  }),
+});
+
 export type TCreateRentalOrderPayload = z.infer<
   typeof createRentalOrderValidation
 >["body"];
-
+export type TUpdateOrderStatusPayload = z.infer<
+  typeof updateOrderStatusValidation
+>["body"];

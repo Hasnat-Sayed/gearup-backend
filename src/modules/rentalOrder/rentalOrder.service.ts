@@ -223,9 +223,137 @@ const getOrderByIdFromDB = async (id: string, userId: string, role: string) => {
   return order;
 };
 
+const cancelOrderInDB = async (id: string, customerId: string) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.rentalOrder.findUniqueOrThrow({
+      where: {
+        id,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (order.customerId !== customerId) {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You can only cancel your own orders.",
+      );
+    }
+    if (order.status !== "PLACED") {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        `Cannot cancel an order that is already ${order.status}.`,
+      );
+    }
+
+    for (const item of order.items) {
+      await tx.gearItem.update({
+        where: {
+          id: item.gearItemId,
+        },
+        data: {
+          quantityAvailable: {
+            increment: item.quantity,
+          },
+        },
+      });
+    }
+
+    return tx.rentalOrder.update({
+      where: {
+        id,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+    });
+  });
+
+  return result;
+};
+
+const VALID_TRANSITIONS: Record<string, RentalOrderStatus> = {
+  PLACED: "CONFIRMED",
+  PAID: "PICKED_UP",
+  PICKED_UP: "RETURNED",
+};
+
+const updateOrderStatusInDB = async (
+  id: string,
+  providerId: string,
+  role: string,
+  nextStatus: RentalOrderStatus,
+) => {
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.rentalOrder.findUniqueOrThrow({
+      where: {
+        id,
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    const ownsAnItem = await tx.gearItem.findFirst({
+      where: {
+        id: {
+          in: order.items.map((i) => i.gearItemId),
+        },
+        providerId,
+      },
+    });
+    
+    if (!ownsAnItem && role !== "ADMIN") {
+      throw new AppError(
+        httpStatus.FORBIDDEN,
+        "You don't manage any item in this order.",
+      );
+    }
+
+    const expectedCurrentStatus = Object.keys(VALID_TRANSITIONS).find(
+      (key) => VALID_TRANSITIONS[key] === nextStatus,
+    );
+    if (order.status !== expectedCurrentStatus) {
+      throw new AppError(
+        httpStatus.BAD_REQUEST,
+        `Cannot move an order from ${order.status} to ${nextStatus}.`,
+      );
+    }
+
+    if (nextStatus === "RETURNED") {
+      for (const item of order.items) {
+        await tx.gearItem.update({
+          where: {
+            id: item.gearItemId,
+          },
+          data: {
+            quantityAvailable: {
+              increment: item.quantity,
+            },
+          },
+        });
+      }
+    }
+
+    return tx.rentalOrder.update({
+      where: {
+        id,
+      },
+      data: {
+        status: nextStatus,
+      },
+    });
+  });
+
+  return result;
+};
+
 export const rentalOrderService = {
   createRentalOrderIntoDB,
   getMyOrdersFromDB,
   getProviderOrdersFromDB,
-  getOrderByIdFromDB
+  getOrderByIdFromDB,
+  cancelOrderInDB,
+  updateOrderStatusInDB,
 };

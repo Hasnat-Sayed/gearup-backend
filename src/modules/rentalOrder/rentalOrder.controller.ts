@@ -60,9 +60,39 @@ const getOrderById = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+const cancelOrder = catchAsync(async (req: Request, res: Response) => {
+  const order = await rentalOrderService.cancelOrderInDB(
+    req.params.id as string ,
+    req.user!.id,
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Order cancelled successfully",
+    data: order,
+  });
+});
+
+const updateOrderStatus = catchAsync(async (req: Request, res: Response) => {
+  const order = await rentalOrderService.updateOrderStatusInDB(
+    req.params.id as string,
+    req.user!.id,
+    req.user!.role,
+    req.body.status,
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: `Order marked as ${req.body.status}`,
+    data: order,
+  });
+});
+
 export const rentalOrderController = {
   createRentalOrder,
   getMyOrders,
   getProviderOrders,
-  getOrderById
+  getOrderById,
+  cancelOrder,
+  updateOrderStatus,
 };
