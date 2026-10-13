@@ -2,6 +2,7 @@ import httpStatus from "http-status";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../utils/AppError";
 import { TCreateReviewPayload } from "./review.validation";
+import { IReviewQuery } from "./review.interface";
 
 const createReviewIntoDB = async (
   customerId: string,
@@ -65,4 +66,46 @@ const createReviewIntoDB = async (
   return result;
 };
 
-export const reviewService = { createReviewIntoDB };
+const getGearItemReviewsFromDB = async (
+  gearItemId: string,
+  query: IReviewQuery,
+) => {
+  const page = Number(query.page) || 1;
+  const limit = Number(query.limit) || 10;
+
+  const [data, total] = await prisma.$transaction(async (tx) => {
+    const data = await tx.review.findMany({
+      where: { gearItemId },
+      skip: (page - 1) * limit,
+      take: limit,
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const total = await tx.review.count({
+      where: { gearItemId },
+    });
+    return [data, total];
+  });
+
+  return {
+    data,
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+export const reviewService = { createReviewIntoDB, getGearItemReviewsFromDB };

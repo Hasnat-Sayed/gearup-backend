@@ -15,4 +15,18 @@ const createReview = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
-export const reviewController = { createReview };
+const getGearItemReviews = catchAsync(async (req: Request, res: Response) => {
+  const result = await reviewService.getGearItemReviewsFromDB(
+    req.params.gearItemId as string,
+    req.query as IReviewQuery,
+  );
+  sendResponse(res, {
+    success: true,
+    statusCode: httpStatus.OK,
+    message: "Reviews fetched successfully",
+    data: result.data,
+    meta: result.meta,
+  });
+});
+
+export const reviewController = { createReview, getGearItemReviews };

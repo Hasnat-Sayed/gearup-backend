@@ -13,5 +13,5 @@ router.post(
   validateRequest(createReviewValidation),
   reviewController.createReview,
 );
-
+router.get("/gear-item/:gearItemId", reviewController.getGearItemReviews);
 export const reviewRoutes = router;
