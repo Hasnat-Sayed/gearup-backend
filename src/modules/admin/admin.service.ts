@@ -3,6 +3,8 @@ import { Prisma } from "../../../generated/prisma/client";
 import { ActiveStatus, Role } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
 import { IAdminUserQuery } from "./admin.interface";
+import { AppError } from "../../utils/AppError";
+import { TUpdateUserStatusPayload } from "./admin.validation";
 
 const getAllUsersFromDB = async (query: IAdminUserQuery) => {
   const page = Number(query.page) || 1;
@@ -51,6 +53,36 @@ const getAllUsersFromDB = async (query: IAdminUserQuery) => {
   };
 };
 
+const updateUserStatusInDB = async (
+  targetUserId: string,
+  adminId: string,
+  payload: TUpdateUserStatusPayload,
+) => {
+  if (targetUserId === adminId) {
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      "You cannot change your own account status.",
+    );
+  }
+
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: targetUserId },
+  });
+  if (user.role === "ADMIN") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "Admin accounts cannot be suspended.",
+    );
+  }
+
+  const result = await prisma.user.update({
+    where: { id: targetUserId },
+    data: { activeStatus: payload.activeStatus },
+    omit: { password: true },
+  });
+  return result;
+};
+
 export const adminService = {
-  getAllUsersFromDB,
+  getAllUsersFromDB, updateUserStatusInDB
 };
