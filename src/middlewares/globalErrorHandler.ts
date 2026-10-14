@@ -25,20 +25,36 @@ export const globalErrorHandler = (
       path: i.path.join("."),
       message: i.message,
     }));
+  } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    switch (err.code) {
+      case "P2025": {
+        statusCode = httpStatus.NOT_FOUND;
+        const model = err.meta?.modelName as string | undefined;
+        message = model ? `${model} not found` : "Record not found";
+        break;
+      }
+      case "P2002": {
+        statusCode = httpStatus.CONFLICT;
+        const target = err.meta?.target;
+        message = Array.isArray(target)
+          ? `Duplicate value for: ${target.join(", ")}`
+          : "A record with these details already exists";
+        break;
+      }
+      default:
+        statusCode = httpStatus.BAD_REQUEST;
+        message =
+          err.code === "P2003"
+            ? "Related record constraint failed"
+            : "Database request error";
+    }
+    errorDetails = err.message;
   } else if (err instanceof Prisma.PrismaClientValidationError) {
     statusCode = httpStatus.BAD_REQUEST;
     message = "Invalid or missing fields";
-  } else if (err instanceof Prisma.PrismaClientKnownRequestError) {
+  } else if (err.type === "entity.parse.failed") {
     statusCode = httpStatus.BAD_REQUEST;
-    message =
-      err.code === "P2002"
-        ? `Duplicate value for: ${(err.meta?.target as string[])?.join(", ")}`
-        : err.code === "P2003"
-          ? "Foreign key constraint failed"
-          : err.code === "P2025"
-            ? "Record not found"
-            : "Database request error";
-    errorDetails = err.message;
+    message = "Invalid JSON in request body";
   } else if (
     err.name === "JsonWebTokenError" ||
     err.name === "TokenExpiredError"
@@ -46,14 +62,12 @@ export const globalErrorHandler = (
     statusCode = httpStatus.UNAUTHORIZED;
     message = "Invalid or expired token";
   } else if (err instanceof Error) {
-    message = err.message;
+    message =
+      process.env.NODE_ENV === "production"
+        ? "Internal server error"
+        : err.message;
   }
 
   console.error("Error:", err);
-  res.status(statusCode).json({
-    success: false,
-    statusCode,
-    message,
-    errorDetails,
-  });
+  res.status(statusCode).json({ success: false, message, errorDetails });
 };
