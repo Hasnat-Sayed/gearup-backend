@@ -7,9 +7,16 @@ import { updateUserStatusValidation } from "./admin.validation";
 
 const router = Router();
 
-router.use(auth(Role.ADMIN)); 
+router.use(auth(Role.ADMIN));
 
 router.get("/users", adminController.getAllUsers);
-router.patch("/users/:id", validateRequest(updateUserStatusValidation), adminController.updateUserStatus);
+router.patch(
+  "/users/:id",
+  validateRequest(updateUserStatusValidation),
+  adminController.updateUserStatus,
+);
+
+router.get("/gear-items", adminController.getAllGearItems);
+router.get("/rentals", adminController.getAllRentals);
 
 export const adminRoutes = router;
