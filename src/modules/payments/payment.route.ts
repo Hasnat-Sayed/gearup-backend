@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { paymentController } from "./payment.controller";
-import { createPaymentValidation } from "./payment.validation";
+import { confirmPaymentValidation, createPaymentValidation } from "./payment.validation";
 import { Role } from "../../../generated/prisma/enums";
 import { auth } from "../../middlewares/auth";
 import { validateRequest } from "../../middlewares/validateRequest";
@@ -14,6 +14,12 @@ router.post(
   auth(Role.CUSTOMER),
   validateRequest(createPaymentValidation),
   paymentController.createPaymentSession,
+);
+router.post(
+  "/confirm",
+  auth(Role.CUSTOMER, Role.ADMIN),
+  validateRequest(confirmPaymentValidation),
+  paymentController.confirmPayment,
 );
 router.get(
   "/",

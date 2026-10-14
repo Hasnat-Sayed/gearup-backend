@@ -116,6 +116,41 @@ const handleWebhook = async (payload: Buffer, signature: string) => {
   }
 };
 
+const confirmPayment = async (
+  sessionId: string,
+  userId: string,
+  role: string,
+) => {
+  const payment = await prisma.payment.findUnique({
+    where: {
+      transactionId: sessionId,
+    },
+    include: {
+      rentalOrder: true,
+    },
+  });
+  if (!payment) throw new AppError(httpStatus.NOT_FOUND, "Payment not found.");
+  if (payment.rentalOrder.customerId !== userId && role !== "ADMIN") {
+    throw new AppError(
+      httpStatus.FORBIDDEN,
+      "You don't have access to this payment.",
+    );
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+  await handleCheckoutCompleted(session);
+
+  const result = await prisma.payment.findUniqueOrThrow({
+    where: {
+      id: payment.id,
+    },
+    include: {
+      rentalOrder: true,
+    },
+  });
+  return result;
+};
+
 const getPaymentsFromDB = async (
   userId: string,
   role: string,
@@ -213,6 +248,7 @@ const getPaymentByIdFromDB = async (
 export const paymentService = {
   createPaymentSession,
   handleWebhook,
+  confirmPayment,
   getPaymentsFromDB,
   getPaymentByIdFromDB,
 };

@@ -203,14 +203,41 @@ const updateGearItemInDB = async (
   role: string,
   payload: TUpdateGearItemPayload,
 ) => {
-  await assertOwnership(id, providerId, role);
-  const result = await prisma.gearItem.update({
-    where: {
-      id,
-    },
-    data: payload,
-  });
+  const gearItem = await assertOwnership(id, providerId, role);
 
+  if (payload.categoryId) {
+    const category = await prisma.category.findUnique({
+      where: {
+        id: payload.categoryId,
+      },
+    });
+    if (!category)
+      throw new AppError(httpStatus.BAD_REQUEST, "Category not found.");
+  }
+
+  const delta =
+    payload.quantityTotal !== undefined
+      ? payload.quantityTotal - gearItem.quantityTotal
+      : 0;
+  if (gearItem.quantityAvailable + delta < 0) {
+    const rentedOut = gearItem.quantityTotal - gearItem.quantityAvailable;
+    throw new AppError(
+      httpStatus.BAD_REQUEST,
+      `Cannot reduce total below the ${rentedOut} unit(s) currently rented out.`,
+    );
+  }
+
+  const result = await prisma.gearItem.update({
+    where: { id },
+    data: {
+      ...payload,
+      ...(delta !== 0 && {
+        quantityAvailable: {
+          increment: delta,
+        },
+      }),
+    },
+  });
   return result;
 };
 
@@ -220,12 +247,18 @@ const deleteGearItemFromDB = async (
   role: string,
 ) => {
   await assertOwnership(id, providerId, role);
-  const result = await prisma.gearItem.delete({
+  const hasHistory = await prisma.rentalOrderItem.count({
     where: {
-      id,
+      gearItemId: id,
     },
   });
-
+  if (hasHistory > 0) {
+    throw new AppError(
+      httpStatus.CONFLICT,
+      "This gear has rental history and cannot be deleted.",
+    );
+  }
+  const result = await prisma.gearItem.delete({ where: { id } });
   return result;
 };
 
